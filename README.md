@@ -1,8 +1,9 @@
-# Nomad LLM
-
+<div align="center">
+  <img src="nomad-llm/nomad.svg" alt="Nomad Logo" width="120"/>
+</div>
 <div align="center">
 
-**🌊 Nomad LLM** — Local AI Desktop Application
+**Nomad LLM** — Local AI Desktop Application
 
 *Offline · Privat · Embedded C++ Inference*
 
