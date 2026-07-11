@@ -11,7 +11,7 @@ class ILlmBackend {
 public:
     virtual ~ILlmBackend() = default;
 
-    virtual bool loadModel(const QString &modelPath, int nCtx, int nGpuLayers,
+    virtual bool loadModel(const QString &modelPath, int nCtx, int nGpuLayers, int nThreads = 0,
                            std::function<void(float)> progressCallback = nullptr) = 0;
     virtual void unloadModel() = 0;
     virtual bool isModelLoaded() const = 0;

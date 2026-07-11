@@ -30,6 +30,7 @@ void HardwareDetector::detect()
     detectRam();
     detectGpu();
     detectDisk();
+    detectBattery();
     emit hardwareDetected();
 }
 
@@ -39,6 +40,7 @@ void HardwareDetector::startMonitoring(int intervalMs)
         m_monitorTimer = new QTimer(this);
         connect(m_monitorTimer, &QTimer::timeout, this, [this]() {
             detectRam(); // Only update RAM (dynamic metric)
+            detectBattery(); // Update battery state
             emit hardwareDetected();
         });
     }
@@ -257,6 +259,57 @@ void HardwareDetector::detectDisk()
     m_diskFreeBytes = storage.bytesAvailable();
 }
 
+// ============== Battery Detection ==============
+
+void HardwareDetector::detectBattery()
+{
+    m_onBattery = false;
+
+#ifdef Q_OS_LINUX
+    // Check /sys/class/power_supply for a battery that is discharging
+    QDir sysPower("/sys/class/power_supply");
+    if (sysPower.exists()) {
+        QStringList supplies = sysPower.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+        for (const QString &supply : supplies) {
+            QFile typeFile(sysPower.filePath(supply + "/type"));
+            if (typeFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                QString type = typeFile.readAll().trimmed();
+                typeFile.close();
+                if (type == "Battery") {
+                    QFile statusFile(sysPower.filePath(supply + "/status"));
+                    if (statusFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                        QString status = statusFile.readAll().trimmed();
+                        statusFile.close();
+                        if (status == "Discharging") {
+                            m_onBattery = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+#elif defined(Q_OS_WIN)
+    SYSTEM_POWER_STATUS sps;
+    if (GetSystemPowerStatus(&sps)) {
+        // ACLineStatus: 0 = Offline (on battery), 1 = Online
+        if (sps.ACLineStatus == 0) {
+            m_onBattery = true;
+        }
+    }
+#elif defined(Q_OS_MAC)
+    QProcess pmset;
+    pmset.start("pmset", QStringList() << "-g" << "batt");
+    pmset.waitForFinished(3000);
+    if (pmset.exitCode() == 0) {
+        QString output = pmset.readAllStandardOutput().toLower();
+        if (output.contains("discharging") || output.contains("battery power")) {
+            m_onBattery = true;
+        }
+    }
+#endif
+}
+
 // ============== Getters ==============
 
 long long HardwareDetector::totalRamBytes() const { return m_totalRamBytes; }
@@ -266,10 +319,28 @@ QString HardwareDetector::cpuModel() const { return m_cpuModel; }
 bool HardwareDetector::gpuAvailable() const { return m_gpuAvailable; }
 QString HardwareDetector::gpuName() const { return m_gpuName; }
 long long HardwareDetector::diskFreeBytes() const { return m_diskFreeBytes; }
+bool HardwareDetector::onBattery() const { return m_onBattery; }
+
+int HardwareDetector::recommendedCpuThreads() const
+{
+    if (m_onBattery) {
+        // Use half the threads to save battery, but at least 1
+        return qMax(1, m_cpuCores / 2);
+    }
+    return m_cpuCores;
+}
 
 QString HardwareDetector::recommendedModel() const
 {
     double ramGB = m_totalRamBytes / (1024.0 * 1024.0 * 1024.0);
+    
+    // Suggest smaller model if on battery
+    if (m_onBattery) {
+        if (ramGB >= 16.0) return "Llama-3-8B-Instruct (Battery Mode)";
+        if (ramGB >= 8.0) return "Phi-3-Mini (Battery Mode)";
+        return "TinyLlama-1.1B (Battery Mode)";
+    }
+    
     if (ramGB >= 16.0) {
         return "Qwen-2.5-Coder-14B (Optimal 16GB+)";
     } else if (ramGB >= 8.0) {
@@ -284,6 +355,7 @@ QString HardwareDetector::recommendedModel() const
 int HardwareDetector::recommendedGpuLayers() const
 {
     if (!m_gpuAvailable) return 0;
+    if (m_onBattery) return 0; // Turn off GPU offloading on battery
     // If GPU is available, offload all layers
     return -1; // -1 means auto/all layers
 }
@@ -307,6 +379,8 @@ QVariantMap HardwareDetector::getHardwareSummary() const
     summary["gpuAvailable"] = m_gpuAvailable;
     summary["gpuName"] = m_gpuName;
     summary["diskFreeGB"] = m_diskFreeBytes / (1024.0 * 1024.0 * 1024.0);
+    summary["onBattery"] = m_onBattery;
+    summary["recommendedCpuThreads"] = recommendedCpuThreads();
     summary["recommendedModel"] = recommendedModel();
     summary["recommendedGpuLayers"] = recommendedGpuLayers();
     summary["recommendedContextSize"] = recommendedContextSize();

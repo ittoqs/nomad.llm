@@ -10,7 +10,7 @@ LlamaBackend::~LlamaBackend() {
     llama_backend_free();
 }
 
-bool LlamaBackend::loadModel(const QString &modelPath, int nCtx, int nGpuLayers,
+bool LlamaBackend::loadModel(const QString &modelPath, int nCtx, int nGpuLayers, int nThreads,
                              std::function<void(float)> progressCallback) {
     unloadModel();
 
@@ -47,7 +47,7 @@ bool LlamaBackend::loadModel(const QString &modelPath, int nCtx, int nGpuLayers,
     m_nCtx = nCtx;
     ctx_params.n_ctx = nCtx;
     ctx_params.n_batch = 512;
-    ctx_params.n_threads = 0;
+    ctx_params.n_threads = nThreads > 0 ? nThreads : 0;
 
     m_ctx = llama_init_from_model(m_model, ctx_params);
     if (!m_ctx) {

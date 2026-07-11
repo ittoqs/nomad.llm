@@ -55,8 +55,7 @@ QString InferenceEngine::loadedModelName() const
     return m_modelName;
 }
 
-void InferenceEngine::loadModel(const QString &modelPath, int nCtx, int nGpuLayers,
-                                 const QString &mmprojPath)
+void InferenceEngine::loadModel(const QString &modelPath, int nCtx, int nGpuLayers, int nThreads, const QString &mmprojPath)
 {
     Q_UNUSED(mmprojPath) // TODO: multimodal support in future
 
@@ -67,13 +66,22 @@ void InferenceEngine::loadModel(const QString &modelPath, int nCtx, int nGpuLaye
 
     m_modelName = QFileInfo(modelPath).baseName();
     emit modelLoadStarted(m_modelName);
+
+    if (m_isModelLoaded) {
+        unloadModel();
+    }
+
+    m_isModelLoaded = false;
+    emit modelLoadedChanged();
+    emit modelLoadProgress(0.0);
+
     QString path = modelPath;
-    QFuture<void> future = QtConcurrent::run([this, path, nCtx, nGpuLayers]() {
-        doLoadModel(path, nCtx, nGpuLayers);
+    QFuture<void> future = QtConcurrent::run([this, path, nCtx, nGpuLayers, nThreads]() {
+        doLoadModel(path, nCtx, nGpuLayers, nThreads);
     });
 }
 
-void InferenceEngine::doLoadModel(const QString &modelPath, int nCtx, int nGpuLayers)
+void InferenceEngine::doLoadModel(const QString &modelPath, int nCtx, int nGpuLayers, int nThreads)
 {
     QMutexLocker locker(&m_modelMutex);
     bool success = false;
@@ -83,7 +91,7 @@ void InferenceEngine::doLoadModel(const QString &modelPath, int nCtx, int nGpuLa
                 emit modelLoadProgress(progress);
             }, Qt::QueuedConnection);
         };
-        success = m_backend->loadModel(modelPath, nCtx, nGpuLayers, progressCb);
+        success = m_backend->loadModel(modelPath, nCtx, nGpuLayers, nThreads, progressCb);
     }
 
     if (!success) {

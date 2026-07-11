@@ -296,7 +296,7 @@ Window {
                     root.activeModelName = name;
                     root.activeFilename = filename;
                     var path = ModelManager.getModelPath(filename);
-                    InferenceEngine.loadModel(path, HardwareDetector.recommendedContextSize, HardwareDetector.recommendedGpuLayers);
+                    InferenceEngine.loadModel(path, HardwareDetector.recommendedContextSize, HardwareDetector.recommendedGpuLayers, HardwareDetector.recommendedCpuThreads);
                     if (root.currentSessionId > 0) {
                         Database.updateSessionModel(root.currentSessionId, name);
                     }
