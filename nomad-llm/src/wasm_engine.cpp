@@ -3,6 +3,11 @@
 #include <iostream>
 
 WasmEngine::WasmEngine(QObject *parent) : QObject(parent) {
+    // SECURITY NOTE:
+    // wasm3 executes WebAssembly which is inherently sandboxed.
+    // By default, it has absolutely no access to the host environment (OS, network, files).
+    // Do NOT link WASI (m3_LinkWASI) or other host functions unless strict security
+    // boundaries and permissions are implemented, as doing so would break the sandbox.
     m_env = m3_NewEnvironment();
 }
 
