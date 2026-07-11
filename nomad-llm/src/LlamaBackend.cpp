@@ -13,6 +13,7 @@ LlamaBackend::~LlamaBackend() {
 bool LlamaBackend::loadModel(const QString &modelPath, int nCtx, int nGpuLayers, int nThreads,
                              std::function<void(float)> progressCallback) {
     unloadModel();
+    m_prev_tokens.clear();
 
     auto model_params = llama_model_default_params();
     model_params.n_gpu_layers = nGpuLayers;
@@ -144,14 +145,23 @@ void LlamaBackend::generate(const QVariantList &messages, int maxTokens, double 
     }
     tokens.resize(n_tokens);
 
-    // KV Cache shifting: remove from m_prev_n_tokens to end
-    llama_kv_self_seq_rm(m_ctx, 0, m_prev_n_tokens, -1);
-    m_prev_n_tokens = n_tokens;
+    // KV Cache shifting: find common prefix
+    int n_past = 0;
+    while (n_past < m_prev_tokens.size() && n_past < tokens.size() && m_prev_tokens[n_past] == tokens[n_past]) {
+        n_past++;
+    }
 
-    llama_batch batch = llama_batch_get_one(tokens.data(), n_tokens);
-    if (llama_decode(m_ctx, batch) != 0) {
-        onError("Failed to process prompt");
-        return;
+    // Remove tokens from KV cache that are not in the common prefix
+    llama_kv_self_seq_rm(m_ctx, 0, n_past, -1);
+    m_prev_tokens = tokens;
+
+    int n_eval = n_tokens - n_past;
+    if (n_eval > 0) {
+        llama_batch batch = llama_batch_get_one(tokens.data() + n_past, n_eval);
+        if (llama_decode(m_ctx, batch) != 0) {
+            onError("Failed to process prompt");
+            return;
+        }
     }
 
     auto sparams = llama_sampler_chain_default_params();
@@ -177,6 +187,7 @@ void LlamaBackend::generate(const QVariantList &messages, int maxTokens, double 
         std::string piece = tokenToString(new_token);
         fullResponse += piece;
         generated++;
+        m_prev_tokens.push_back(new_token);
 
         double elapsed = timer.elapsed() / 1000.0;
         double tps = (elapsed > 0) ? (generated / elapsed) : 0;
