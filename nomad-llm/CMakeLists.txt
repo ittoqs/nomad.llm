@@ -103,6 +103,8 @@ set(NOMAD_SOURCES
     src/model_manager.h
     src/inference_engine.cpp
     src/inference_engine.h
+    src/memory_manager.cpp
+    src/memory_manager.h
     src/document_processor.cpp
     src/document_processor.h
     src/voice_manager.cpp

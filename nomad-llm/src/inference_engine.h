@@ -29,6 +29,7 @@ public:
 
     bool isModelLoaded() const;
     bool isGenerating() const;
+    bool isBackgroundGenerating() const;
     double tokensPerSecond() const;
     int contextUsed() const;
     int contextTotal() const;
@@ -55,6 +56,9 @@ public:
     Q_INVOKABLE void generate(const QVariantList &messages, int maxTokens = 2048,
                                double temperature = 0.7, double topP = 0.9);
 
+    Q_INVOKABLE void generateBackground(const QVariantList &messages, int maxTokens = 1024,
+                                         double temperature = 0.3, double topP = 0.9);
+
     Q_INVOKABLE void stopGeneration();
 
 signals:
@@ -67,10 +71,12 @@ signals:
     void tokenGenerated(const QString &token);
     void generationFinished(const QString &fullResponse);
     void generationError(const QString &error);
+    void backgroundGenerationFinished(const QString &fullResponse);
+    void backgroundGenerationError(const QString &error);
 
 private:
     void doLoadModel(const QString &modelPath, int nCtx, int nGpuLayers, int nThreads);
-    void doGenerate(QVariantList messages, int maxTokens, double temperature, double topP);
+    void doGenerate(QVariantList messages, int maxTokens, double temperature, double topP, bool isBackground);
     std::string buildPrompt(const QVariantList &messages);
     std::string tokenToString(int token);
 
@@ -80,6 +86,7 @@ private:
     int m_nCtx = 4096;
 
     std::atomic<bool> m_generating{false};
+    std::atomic<bool> m_backgroundGenerating{false};
     std::atomic<bool> m_stopRequested{false};
     double m_tokensPerSecond = 0.0;
     int m_contextUsed = 0;

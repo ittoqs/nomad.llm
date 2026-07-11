@@ -97,6 +97,10 @@ void DatabaseManager::createTables()
     // Enable foreign keys
     q.exec("PRAGMA foreign_keys = ON");
 
+    // Add new columns for dynamic context (safe to fail if already exist)
+    q.exec("ALTER TABLE sessions ADD COLUMN summary TEXT DEFAULT ''");
+    q.exec("ALTER TABLE sessions ADD COLUMN last_summarized_msg_id INTEGER DEFAULT 0");
+
     // FTS5 virtual table for document search
     q.exec(R"(
         CREATE VIRTUAL TABLE IF NOT EXISTS documents USING fts5(filename, content, chunk_index)
@@ -241,6 +245,41 @@ void DatabaseManager::updateSessionPersonality(int sessionId, const QString &per
     q.addBindValue(personality);
     q.addBindValue(sessionId);
     q.exec();
+}
+
+void DatabaseManager::updateSessionSummary(int sessionId, const QString &summary, int lastMsgId)
+{
+    QSqlDatabase db = getConnection();
+    QSqlQuery q(db);
+    q.prepare("UPDATE sessions SET summary = ?, last_summarized_msg_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+    q.addBindValue(summary);
+    q.addBindValue(lastMsgId);
+    q.addBindValue(sessionId);
+    q.exec();
+}
+
+QString DatabaseManager::getSessionSummary(int sessionId)
+{
+    QSqlDatabase db = getConnection();
+    QSqlQuery q(db);
+    q.prepare("SELECT summary FROM sessions WHERE id = ?");
+    q.addBindValue(sessionId);
+    if (q.exec() && q.next()) {
+        return q.value(0).toString();
+    }
+    return QString();
+}
+
+int DatabaseManager::getSessionLastSummarizedId(int sessionId)
+{
+    QSqlDatabase db = getConnection();
+    QSqlQuery q(db);
+    q.prepare("SELECT last_summarized_msg_id FROM sessions WHERE id = ?");
+    q.addBindValue(sessionId);
+    if (q.exec() && q.next()) {
+        return q.value(0).toInt();
+    }
+    return 0;
 }
 
 // ============== Messages ==============

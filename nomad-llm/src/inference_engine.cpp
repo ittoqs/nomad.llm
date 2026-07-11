@@ -35,6 +35,11 @@ bool InferenceEngine::isGenerating() const
     return m_generating.load();
 }
 
+bool InferenceEngine::isBackgroundGenerating() const
+{
+    return m_backgroundGenerating.load();
+}
+
 double InferenceEngine::tokensPerSecond() const
 {
     return m_tokensPerSecond;
@@ -145,55 +150,103 @@ void InferenceEngine::generate(const QVariantList &messages, int maxTokens,
         return;
     }
 
+    if (isBackgroundGenerating()) {
+        // Cancel background task to prioritize user request
+        stopGeneration();
+        // Wait briefly for background to stop (simple spin for demonstration, should be improved)
+        while(m_backgroundGenerating.load()) {
+            QThread::msleep(10);
+        }
+    }
+
     m_stopRequested.store(false);
     m_generating.store(true);
     emit generatingChanged();
 
     QVariantList msgsCopy = messages;
     QFuture<void> future = QtConcurrent::run([this, msgsCopy, maxTokens, temperature, topP]() {
-        doGenerate(msgsCopy, maxTokens, temperature, topP);
+        doGenerate(msgsCopy, maxTokens, temperature, topP, false);
+    });
+}
+
+void InferenceEngine::generateBackground(const QVariantList &messages, int maxTokens,
+                                         double temperature, double topP)
+{
+    if (!isModelLoaded()) {
+        emit backgroundGenerationError("No model loaded");
+        return;
+    }
+
+    if (isGenerating() || isBackgroundGenerating()) {
+        emit backgroundGenerationError("Generation already in progress");
+        return;
+    }
+
+    m_stopRequested.store(false);
+    m_backgroundGenerating.store(true);
+
+    QVariantList msgsCopy = messages;
+    QFuture<void> future = QtConcurrent::run([this, msgsCopy, maxTokens, temperature, topP]() {
+        doGenerate(msgsCopy, maxTokens, temperature, topP, true);
     });
 }
 
 void InferenceEngine::doGenerate(QVariantList messages, int maxTokens,
-                                  double temperature, double topP)
+                                  double temperature, double topP, bool isBackground)
 {
     QMutexLocker locker(&m_modelMutex);
 
     if (!m_backend || !m_backend->isModelLoaded()) {
-        QMetaObject::invokeMethod(this, [this]() {
-            m_generating.store(false);
-            emit generationError("Model not loaded");
-            emit generatingChanged();
+        QMetaObject::invokeMethod(this, [this, isBackground]() {
+            if (isBackground) {
+                m_backgroundGenerating.store(false);
+                emit backgroundGenerationError("Model not loaded");
+            } else {
+                m_generating.store(false);
+                emit generationError("Model not loaded");
+                emit generatingChanged();
+            }
         }, Qt::QueuedConnection);
         return;
     }
 
     // Fully delegated generation to backend
     m_backend->generate(messages, maxTokens, temperature, topP,
-        [this](const std::string& token, int generated, int contextUsed, double tps) {
+        [this, isBackground](const std::string& token, int generated, int contextUsed, double tps) {
             m_tokensPerSecond = tps;
             m_contextUsed = contextUsed;
             QString qPiece = QString::fromStdString(token);
             if(m_stopRequested.load()) m_backend->stopGeneration();
-            QMetaObject::invokeMethod(this, [this, qPiece]() {
-                emit tokenGenerated(qPiece);
+            QMetaObject::invokeMethod(this, [this, qPiece, isBackground]() {
+                if (!isBackground) {
+                    emit tokenGenerated(qPiece);
+                }
                 emit statsUpdated();
             }, Qt::QueuedConnection);
         },
-        [this](const std::string& error) {
-            QMetaObject::invokeMethod(this, [this, error]() {
-                m_generating.store(false);
-                emit generationError(QString::fromStdString(error));
-                emit generatingChanged();
+        [this, isBackground](const std::string& error) {
+            QMetaObject::invokeMethod(this, [this, error, isBackground]() {
+                if (isBackground) {
+                    m_backgroundGenerating.store(false);
+                    emit backgroundGenerationError(QString::fromStdString(error));
+                } else {
+                    m_generating.store(false);
+                    emit generationError(QString::fromStdString(error));
+                    emit generatingChanged();
+                }
             }, Qt::QueuedConnection);
         },
-        [this](const std::string& fullResponse) {
+        [this, isBackground](const std::string& fullResponse) {
             QString qFullResponse = QString::fromStdString(fullResponse);
-            QMetaObject::invokeMethod(this, [this, qFullResponse]() {
-                m_generating.store(false);
-                emit generationFinished(qFullResponse);
-                emit generatingChanged();
+            QMetaObject::invokeMethod(this, [this, qFullResponse, isBackground]() {
+                if (isBackground) {
+                    m_backgroundGenerating.store(false);
+                    emit backgroundGenerationFinished(qFullResponse);
+                } else {
+                    m_generating.store(false);
+                    emit generationFinished(qFullResponse);
+                    emit generatingChanged();
+                }
                 emit statsUpdated();
             }, Qt::QueuedConnection);
         }

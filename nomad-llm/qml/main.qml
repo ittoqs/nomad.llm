@@ -67,6 +67,7 @@ Window {
 
     function switchToSession(sessionId) {
         currentSessionId = sessionId;
+        MemoryManager.setCurrentSessionId(sessionId);
         var session = Database.getSession(sessionId);
         currentSystemPrompt = session.system_prompt || Settings.defaultSystemPrompt;
         currentPersonality = session.personality || "general";
@@ -109,6 +110,12 @@ Window {
         currentCitations = [];
         if (currentSystemPrompt) {
             var sysPrompt = currentSystemPrompt;
+            
+            var summary = Database.getSessionSummary(currentSessionId);
+            if (summary && summary !== "") {
+                sysPrompt += "\n\nSession Context Summary:\n" + summary + "\n";
+            }
+            
             var context = DocProcessor.searchContext(msg, 2);
             if (context.length > 0) {
                 sysPrompt += "\n\nRelevant context:\n";
@@ -124,9 +131,11 @@ Window {
             messages.push({"role": "system", "content": sysPrompt});
         }
 
+        var lastSummarizedId = Database.getSessionLastSummarizedId(currentSessionId);
         var history = Database.getRecentMessages(currentSessionId, Settings.chatHistoryLimit);
         for (var i = 0; i < history.length; i++) {
             var h = history[i];
+            if (h.id <= lastSummarizedId) continue;
             if (h.sender === "User" && h.text === msg && i === history.length - 1) continue;
             messages.push({
                 "role": h.sender === "User" ? "user" : "assistant",

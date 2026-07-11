@@ -26,6 +26,9 @@ public:
     Q_INVOKABLE void updateSessionModel(int sessionId, const QString &modelName);
     Q_INVOKABLE void updateSessionPrompt(int sessionId, const QString &systemPrompt);
     Q_INVOKABLE void updateSessionPersonality(int sessionId, const QString &personality);
+    Q_INVOKABLE void updateSessionSummary(int sessionId, const QString &summary, int lastMsgId);
+    Q_INVOKABLE QString getSessionSummary(int sessionId);
+    Q_INVOKABLE int getSessionLastSummarizedId(int sessionId);
 
     // Messages
     Q_INVOKABLE void addMessage(int sessionId, const QString &sender, const QString &text,
