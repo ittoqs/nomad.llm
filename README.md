@@ -44,7 +44,7 @@ Use the GUI input box to paste any Hugging Face Repo ID and filename to seamless
 ### 📄 Local RAG (Document Chat)
 Upload TXT, MD, CSV, or JSON files — they're automatically chunked and indexed using **SQLite FTS5** and native **Dense Vector Embeddings** for highly accurate semantic search.
 
-### 🖼️ Vision & Image Generation (New)
+### 🖼️ Vision & Image Generation
 - **Vision Models (Llava):** Built-in multimodal support allowing the AI to see and analyze images using CLIP projectors.
 - **Stable Diffusion:** Generate images locally and entirely offline through our embedded Stable Diffusion engine.
 
