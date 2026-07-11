@@ -18,6 +18,7 @@
 #include "js_engine.h"
 #include "wasm_engine.h"
 #include "memory_manager.h"
+#include "sd_engine.h"
 
 class ClipboardHelper : public QObject {
     Q_OBJECT
@@ -86,6 +87,9 @@ int main(int argc, char *argv[])
     // Wasm engine
     WasmEngine wasmEngine;
 
+    // Stable Diffusion engine
+    SDEngine sdEngine;
+
     // Clipboard helper
     ClipboardHelper clipboardHelper;
 
@@ -105,6 +109,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("JsEngine", &jsEngine);
     engine.rootContext()->setContextProperty("WasmEngine", &wasmEngine);
     engine.rootContext()->setContextProperty("MemoryManager", &memoryManager);
+    engine.rootContext()->setContextProperty("SDEngine", &sdEngine);
     engine.rootContext()->setContextProperty("Clipboard", &clipboardHelper);
 
     // App version for QML

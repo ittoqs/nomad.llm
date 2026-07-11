@@ -9,13 +9,13 @@
 #include "llama.h"
 #include "common.h"
 #include "LlamaBackend.h"
-#include "LlamaBackend.h"
+#include "VisionBackend.h"
+#include <QEventLoop>
+#include <QTimer>
 
 InferenceEngine::InferenceEngine(QObject *parent)
     : QObject(parent)
 {
-    // Initialize llama.cpp backend
-    m_backend = new LlamaBackend();
 }
 
 InferenceEngine::~InferenceEngine()
@@ -62,8 +62,6 @@ QString InferenceEngine::loadedModelName() const
 
 void InferenceEngine::loadModel(const QString &modelPath, int nCtx, int nGpuLayers, int nThreads, const QString &mmprojPath)
 {
-    Q_UNUSED(mmprojPath) // TODO: multimodal support in future
-
     if (isGenerating()) {
         emit modelLoadFinished(false, "Cannot load model while generating");
         return;
@@ -72,31 +70,44 @@ void InferenceEngine::loadModel(const QString &modelPath, int nCtx, int nGpuLaye
     m_modelName = QFileInfo(modelPath).baseName();
     emit modelLoadStarted(m_modelName);
 
-    if (m_isModelLoaded) {
+    if (isModelLoaded()) {
         unloadModel();
     }
 
-    m_isModelLoaded = false;
     emit modelLoadedChanged();
     emit modelLoadProgress(0.0);
 
     QString path = modelPath;
-    QFuture<void> future = QtConcurrent::run([this, path, nCtx, nGpuLayers, nThreads]() {
-        doLoadModel(path, nCtx, nGpuLayers, nThreads);
+    QString projPath = mmprojPath;
+    QFuture<void> future = QtConcurrent::run([this, path, nCtx, nGpuLayers, nThreads, projPath]() {
+        doLoadModel(path, nCtx, nGpuLayers, nThreads, projPath);
     });
 }
 
-void InferenceEngine::doLoadModel(const QString &modelPath, int nCtx, int nGpuLayers, int nThreads)
+void InferenceEngine::doLoadModel(const QString &modelPath, int nCtx, int nGpuLayers, int nThreads, const QString &mmprojPath)
 {
     QMutexLocker locker(&m_modelMutex);
     bool success = false;
+    
     if (m_backend) {
-        auto progressCb = [this](float progress) {
-            QMetaObject::invokeMethod(this, [this, progress]() {
-                emit modelLoadProgress(progress);
-            }, Qt::QueuedConnection);
-        };
-        success = m_backend->loadModel(modelPath, nCtx, nGpuLayers, nThreads, progressCb);
+        delete m_backend;
+        m_backend = nullptr;
+    }
+
+    auto progressCb = [this](float progress) {
+        QMetaObject::invokeMethod(this, [this, progress]() {
+            emit modelLoadProgress(progress);
+        }, Qt::QueuedConnection);
+    };
+
+    if (!mmprojPath.isEmpty()) {
+        auto *vb = new VisionBackend();
+        success = vb->loadVisionModel(modelPath, mmprojPath, nCtx, nGpuLayers, nThreads);
+        m_backend = vb;
+    } else {
+        auto *lb = new LlamaBackend();
+        success = lb->loadModel(modelPath, nCtx, nGpuLayers, nThreads, progressCb);
+        m_backend = lb;
     }
 
     if (!success) {
@@ -109,7 +120,7 @@ void InferenceEngine::doLoadModel(const QString &modelPath, int nCtx, int nGpuLa
     }
 
     m_modelPath = modelPath;
-    m_nCtx = ((LlamaBackend*)m_backend)->contextTotal();
+    m_nCtx = m_backend->contextTotal();
 
     QMetaObject::invokeMethod(this, [this]() {
         emit modelLoadFinished(true, "");
@@ -153,10 +164,11 @@ void InferenceEngine::generate(const QVariantList &messages, int maxTokens,
     if (isBackgroundGenerating()) {
         // Cancel background task to prioritize user request
         stopGeneration();
-        // Wait briefly for background to stop (simple spin for demonstration, should be improved)
-        while(m_backgroundGenerating.load()) {
-            QThread::msleep(10);
-        }
+        QEventLoop loop;
+        connect(this, &InferenceEngine::backgroundGenerationFinished, &loop, &QEventLoop::quit);
+        connect(this, &InferenceEngine::backgroundGenerationError, &loop, &QEventLoop::quit);
+        QTimer::singleShot(2000, &loop, &QEventLoop::quit); // Timeout to prevent hang
+        loop.exec();
     }
 
     m_stopRequested.store(false);
