@@ -63,6 +63,17 @@ set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(whisper_cpp)
 
+# Stable Diffusion (built as separate CLI for stability / out-of-process execution)
+FetchContent_Declare(
+    stable_diffusion_cpp
+    GIT_REPOSITORY https://github.com/leejet/stable-diffusion.cpp.git
+    GIT_TAG master
+    GIT_SHALLOW TRUE
+)
+set(SD_BUILD_EXAMPLES ON CACHE BOOL "" FORCE)
+set(SD_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(stable_diffusion_cpp)
+
 FetchContent_Declare(
     pybind11
     GIT_REPOSITORY https://github.com/pybind/pybind11.git
@@ -124,9 +135,13 @@ set(NOMAD_SOURCES
     src/js_engine.h
     src/wasm_engine.cpp
     src/wasm_engine.h
+    src/sd_engine.cpp
+    src/sd_engine.h
     src/ILlmBackend.h
     src/LlamaBackend.h
     src/LlamaBackend.cpp
+    src/VisionBackend.h
+    src/VisionBackend.cpp
     src/embedding_engine.h
     src/embedding_engine.cpp
     ${sqlite_vec_SOURCE_DIR}/sqlite-vec.c
@@ -149,6 +164,7 @@ qt_add_qml_module(nomad_llm
         qml/components/StatusBar.qml
         qml/components/SettingsDrawer.qml
         qml/components/PersonalityPopup.qml
+        qml/components/ImageEditorPopup.qml
         qml/onboarding/OnboardingWizard.qml
         qml/onboarding/WelcomeStep.qml
         qml/onboarding/HardwareScanStep.qml
@@ -191,6 +207,7 @@ target_link_libraries(nomad_llm PRIVATE
     m3
     Python3::Module
     Python3::Python
+    llava
 )
 
 # ============================================================
@@ -214,7 +231,7 @@ endif()
 # ============================================================
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/config.json DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
-install(TARGETS nomad_llm
+install(TARGETS nomad_llm sd
     BUNDLE DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )

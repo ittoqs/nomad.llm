@@ -53,6 +53,27 @@ ListView {
                 anchors.margins: 14
                 spacing: 4
 
+                // Parse our custom IMG_ATTACH payload
+                property var msgImages: {
+                    if (model.text && model.text.startsWith("IMG_ATTACH:")) {
+                        var parts = model.text.substring(11).split(":::");
+                        try {
+                            return JSON.parse(parts[0]);
+                        } catch (e) {
+                            return [];
+                        }
+                    }
+                    return [];
+                }
+                
+                property string cleanText: {
+                    if (model.text && model.text.startsWith("IMG_ATTACH:")) {
+                        var parts = model.text.substring(11).split(":::");
+                        return parts.slice(1).join(":::");
+                    }
+                    return model.text || "";
+                }
+
                 // Sender label
                 Text {
                     text: isUser ? "You" : "Nomad"
@@ -61,8 +82,33 @@ ListView {
                     font.bold: true
                 }
 
+                // Image Grid for attachments
+                GridLayout {
+                    columns: 2
+                    Layout.fillWidth: true
+                    visible: msgImages.length > 0
+                    
+                    Repeater {
+                        model: msgImages
+                        Rectangle {
+                            Layout.preferredWidth: 160
+                            Layout.preferredHeight: 160
+                            radius: 8
+                            color: Theme.bgItem
+                            clip: true
+                            
+                            Image {
+                                anchors.fill: parent
+                                anchors.margins: 2
+                                source: modelData
+                                fillMode: Image.PreserveAspectCrop
+                            }
+                        }
+                    }
+                }
+
                 Text {
-                    text: model.text
+                    text: cleanText
                     color: Theme.textMain
                     wrapMode: Text.WordWrap
                     font.pixelSize: Settings.fontSize
