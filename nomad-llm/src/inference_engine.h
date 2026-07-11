@@ -12,7 +12,6 @@
 // Forward declarations for llama.cpp types
 struct llama_sampler;
 class ILlmBackend;
-class LlamaBackend;
 
 class InferenceEngine : public QObject {
     Q_OBJECT
@@ -75,12 +74,12 @@ signals:
     void backgroundGenerationError(const QString &error);
 
 private:
-    void doLoadModel(const QString &modelPath, int nCtx, int nGpuLayers, int nThreads);
+    void doLoadModel(const QString &modelPath, int nCtx, int nGpuLayers, int nThreads, const QString &mmprojPath);
     void doGenerate(QVariantList messages, int maxTokens, double temperature, double topP, bool isBackground);
     std::string buildPrompt(const QVariantList &messages);
     std::string tokenToString(int token);
 
-    LlamaBackend *m_backend = nullptr;
+    ILlmBackend *m_backend = nullptr;
     QString m_modelPath;
     QString m_modelName;
     int m_nCtx = 4096;

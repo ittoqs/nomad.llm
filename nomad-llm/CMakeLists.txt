@@ -11,6 +11,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Qt6
 find_package(Qt6 COMPONENTS Core Gui Qml Quick Network Sql Widgets Multimedia Concurrent REQUIRED)
 
+# SQLite3 (required for sqlite-vec)
+find_package(SQLite3 REQUIRED)
+
 # GPU Support — auto-detect
 # CUDA
 find_package(CUDAToolkit QUIET)
@@ -208,6 +211,7 @@ target_link_libraries(nomad_llm PRIVATE
     Python3::Module
     Python3::Python
     llava
+    SQLite::SQLite3
 )
 
 # ============================================================
@@ -231,9 +235,16 @@ endif()
 # ============================================================
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/config.json DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
-install(TARGETS nomad_llm sd
+install(TARGETS nomad_llm
     BUNDLE DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+if(TARGET sd)
+    install(TARGETS sd
+        BUNDLE DESTINATION .
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
 
 install(FILES config.json DESTINATION ${CMAKE_INSTALL_BINDIR})
