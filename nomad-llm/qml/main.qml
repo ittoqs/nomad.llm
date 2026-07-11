@@ -27,6 +27,7 @@ Window {
     property string selectedImagePath: ""
     property string selectedImageBase64: ""
     property string currentSystemPrompt: Settings.defaultSystemPrompt
+    property var currentCitations: []
 
     // ================ THEME ================
     QtObject {
@@ -139,15 +140,21 @@ Window {
 
         // Build messages for inference
         var messages = [];
+        currentCitations = [];
         if (currentSystemPrompt) {
             var sysPrompt = currentSystemPrompt;
             // Append RAG context if documents indexed
             var context = DocProcessor.searchContext(msg, 2);
             if (context.length > 0) {
                 sysPrompt += "\n\nRelevant context:\n";
+                var citations = [];
                 for (var c = 0; c < context.length; c++) {
                     sysPrompt += context[c].content + "\n";
+                    if (citations.indexOf(context[c].filename) === -1) {
+                        citations.push(context[c].filename);
+                    }
                 }
+                currentCitations = citations;
             }
             messages.push({"role": "system", "content": sysPrompt});
         }
@@ -193,8 +200,23 @@ Window {
 
         function onGenerationFinished(fullResponse) {
             isThinking = false;
-            Database.addMessage(currentSessionId, "Nomad", fullResponse, "");
+
+            var finalResponse = fullResponse;
+            if (currentCitations && currentCitations.length > 0) {
+                finalResponse += "\n\n**" + (typeof t === 'function' ? t("sources") || "Sources" : "Sources") + ":**\n";
+                for (var i = 0; i < currentCitations.length; i++) {
+                    finalResponse += "- " + currentCitations[i] + "\n";
+                }
+
+                // Update the UI buffer if it's the last message
+                if (chatModel.count > 0 && chatModel.get(chatModel.count - 1).sender === "Nomad") {
+                    chatModel.setProperty(chatModel.count - 1, "text", finalResponse);
+                }
+            }
+
+            Database.addMessage(currentSessionId, "Nomad", finalResponse, "");
             currentResponseBuffer = "";
+            currentCitations = [];
         }
 
         function onGenerationError(error) {
