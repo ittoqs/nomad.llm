@@ -42,7 +42,14 @@ Pre-configured models optimized for different tasks, downloadable directly from 
 Use the GUI input box to paste any Hugging Face Repo ID and filename to seamlessly download community models!
 
 ### 📄 Local RAG (Document Chat)
-Upload TXT, MD, CSV, or JSON files — they're automatically chunked and indexed using **SQLite FTS5**.
+Upload TXT, MD, CSV, or JSON files — they're automatically chunked and indexed using **SQLite FTS5** and native **Dense Vector Embeddings** for highly accurate semantic search.
+
+### 🖼️ Vision & Image Generation (New)
+- **Vision Models (Llava):** Built-in multimodal support allowing the AI to see and analyze images using CLIP projectors.
+- **Stable Diffusion:** Generate images locally and entirely offline through our embedded Stable Diffusion engine.
+
+### 🧠 Advanced Context & Memory Management
+Intelligent memory management ensures efficient prompt caching and context window rotation, keeping long conversations fast and coherent.
 
 ### 🔒 Privacy First (Offline-First)
 All inference and data processing happen entirely on your local machine. **Zero telemetry**, zero cloud dependencies. Your data never leaves your device.
@@ -115,11 +122,15 @@ nomad.llm/
 │   │   ├── inference_engine.*  # llama.cpp wrapper (model loading, generation)
 │   │   ├── ILlmBackend.h       # Interface abstraction for LLM backend
 │   │   ├── LlamaBackend.*      # llama.cpp specific backend implementation
+│   │   ├── VisionBackend.*     # Vision/Llava model implementation with CLIP projector
+│   │   ├── sd_engine.*         # Stable Diffusion image generation engine
+│   │   ├── embedding_engine.*  # Native dense vector embedding computation
+│   │   ├── memory_manager.*    # Chat history and context window management
 │   │   ├── database_manager.*  # SQLite WAL + FTS5 (sessions, messages, RAG)
 │   │   ├── model_manager.*     # HuggingFace model download + management
 │   │   ├── settings_manager.*  # User prefs, i18n, config persistence
 │   │   ├── hardware_detector.* # CPU/RAM/GPU/Disk detection
-│   │   ├── document_processor.*# Document → FTS5 indexing for RAG
+│   │   ├── document_processor.*# Document → FTS5/Embeddings indexing for RAG
 │   │   ├── voice_manager.*     # whisper.cpp integration for offline voice
 │   │   ├── script_engine.*     # pybind11 Python scripting integration
 │   │   ├── js_engine.*         # Qt QJSEngine integration for JavaScript
