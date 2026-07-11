@@ -32,7 +32,7 @@ public:
 
 private:
     std::atomic<bool> m_stop{false};
-    int m_prev_n_tokens = 0;
+    std::vector<int32_t> m_prev_tokens;
     llama_model *m_model = nullptr;
     llama_context *m_ctx = nullptr;
     int m_nCtx = 4096;
