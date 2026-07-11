@@ -13,7 +13,7 @@ public:
     LlamaBackend();
     ~LlamaBackend() override;
 
-    bool loadModel(const QString &modelPath, int nCtx, int nGpuLayers,
+    bool loadModel(const QString &modelPath, int nCtx, int nGpuLayers, int nThreads = 0,
                    std::function<void(float)> progressCallback = nullptr) override;
     void unloadModel() override;
     bool isModelLoaded() const override;

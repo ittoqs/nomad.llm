@@ -42,7 +42,7 @@ public:
      * @param mmprojPath Optional: path to mmproj file for multimodal models
      */
     Q_INVOKABLE void loadModel(const QString &modelPath, int nCtx = 0,
-                                int nGpuLayers = 0, const QString &mmprojPath = "");
+                                int nGpuLayers = 0, int nThreads = 0, const QString &mmprojPath = "");
     Q_INVOKABLE void unloadModel();
 
     /**
@@ -69,7 +69,7 @@ signals:
     void generationError(const QString &error);
 
 private:
-    void doLoadModel(const QString &modelPath, int nCtx, int nGpuLayers);
+    void doLoadModel(const QString &modelPath, int nCtx, int nGpuLayers, int nThreads);
     void doGenerate(QVariantList messages, int maxTokens, double temperature, double topP);
     std::string buildPrompt(const QVariantList &messages);
     std::string tokenToString(int token);
