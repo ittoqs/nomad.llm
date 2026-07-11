@@ -1,5 +1,6 @@
 #include "document_processor.h"
 #include "database_manager.h"
+#include "embedding_engine.h"
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
@@ -10,6 +11,7 @@
 DocumentProcessor::DocumentProcessor(DatabaseManager *db, QObject *parent)
     : QObject(parent), m_db(db)
 {
+    m_embeddingEngine = new EmbeddingEngine(this);
 }
 
 bool DocumentProcessor::isProcessing() const
@@ -87,10 +89,25 @@ void DocumentProcessor::processFile(const QString &filePath)
     // Remove existing entries
     m_db->deleteDocument(filename);
 
+    if (!m_embeddingEngine->isModelLoaded()) {
+        qWarning() << "Embedding model not loaded, cannot index documents properly";
+        m_processing = false;
+        emit processingChanged();
+        emit processingError(filename, "Embedding model not loaded");
+        return;
+    }
+
     for (const QString &chunk : chunks) {
         if (!chunk.trimmed().isEmpty()) {
-            m_db->indexDocument(filename, chunk);
-            chunkCount++;
+            std::vector<float> embed = m_embeddingEngine->computeEmbedding(chunk);
+            if (!embed.empty()) {
+                QVariantList varEmbed;
+                for (float f : embed) {
+                    varEmbed.append(f);
+                }
+                m_db->indexDocument(filename, chunk, varEmbed);
+                chunkCount++;
+            }
         }
     }
 
@@ -111,7 +128,25 @@ QVariantList DocumentProcessor::getIndexedDocuments()
 
 QVariantList DocumentProcessor::searchContext(const QString &query, int limit)
 {
-    return m_db->searchDocuments(query, limit);
+    if (!m_embeddingEngine->isModelLoaded()) {
+        qWarning() << "Embedding model not loaded";
+        return {};
+    }
+    
+    std::vector<float> queryEmbed = m_embeddingEngine->computeEmbedding(query);
+    if (queryEmbed.empty()) return {};
+
+    QVariantList varEmbed;
+    for (float f : queryEmbed) {
+        varEmbed.append(f);
+    }
+
+    return m_db->searchDocuments(varEmbed, limit);
+}
+
+bool DocumentProcessor::loadEmbeddingModel(const QString &modelPath)
+{
+    return m_embeddingEngine->loadModel(modelPath);
 }
 
 QString DocumentProcessor::readTextFile(const QString &filePath)

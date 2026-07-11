@@ -39,9 +39,9 @@ public:
     Q_INVOKABLE int getMessageCount(int sessionId);
     Q_INVOKABLE QVariantList searchMessages(const QString &query, int limit = 20);
 
-    // Documents (FTS5 RAG)
-    Q_INVOKABLE void indexDocument(const QString &filename, const QString &content);
-    Q_INVOKABLE QVariantList searchDocuments(const QString &query, int limit = 3);
+    // Documents (Vector RAG)
+    Q_INVOKABLE void indexDocument(const QString &filename, const QString &content, const QVariantList &embedding);
+    Q_INVOKABLE QVariantList searchDocuments(const QVariantList &queryEmbedding, int limit = 3);
     Q_INVOKABLE void deleteDocument(const QString &filename);
     Q_INVOKABLE QVariantList getIndexedDocuments();
 

@@ -6,6 +6,12 @@
 #include <QDateTime>
 #include <QRegularExpression>
 #include <QFileInfo>
+#include <QSqlDriver>
+#include <QVariant>
+
+// SQLite and sqlite-vec
+#include "sqlite3.h"
+#include "sqlite-vec.h"
 
 DatabaseManager::DatabaseManager(const QString &dbPath, QObject *parent)
     : QObject(parent), m_dbPath(dbPath)
@@ -41,6 +47,21 @@ QSqlDatabase DatabaseManager::getConnection()
     if (!db.open()) {
         qWarning() << "Failed to open database:" << db.lastError().text();
         emit errorOccurred("Database error: " + db.lastError().text());
+        return db;
+    }
+
+    // Initialize sqlite-vec for this connection
+    QVariant v = db.driver()->handle();
+    if (v.isValid() && qstrcmp(v.typeName(), "sqlite3*") == 0) {
+        sqlite3 *handle = *static_cast<sqlite3 **>(v.data());
+        if (handle) {
+            char *errMsg = nullptr;
+            sqlite3_vec_init(handle, &errMsg, nullptr);
+            if (errMsg) {
+                qWarning() << "Failed to initialize sqlite-vec:" << errMsg;
+                sqlite3_free(errMsg);
+            }
+        }
     }
 
     return db;
@@ -101,9 +122,22 @@ void DatabaseManager::createTables()
     q.exec("ALTER TABLE sessions ADD COLUMN summary TEXT DEFAULT ''");
     q.exec("ALTER TABLE sessions ADD COLUMN last_summarized_msg_id INTEGER DEFAULT 0");
 
-    // FTS5 virtual table for document search
+    // Standard table for document text chunks
     q.exec(R"(
-        CREATE VIRTUAL TABLE IF NOT EXISTS documents USING fts5(filename, content, chunk_index)
+        CREATE TABLE IF NOT EXISTS document_chunks (
+            chunk_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT NOT NULL,
+            content TEXT NOT NULL,
+            chunk_index INTEGER
+        )
+    )");
+
+    // Vector virtual table for embeddings
+    q.exec(R"(
+        CREATE VIRTUAL TABLE IF NOT EXISTS vec_documents USING vec0(
+            chunk_id INTEGER PRIMARY KEY,
+            embedding float[1024]
+        )
     )");
 
     // Settings key-value store
@@ -413,19 +447,14 @@ QVariantList DatabaseManager::searchMessages(const QString &query, int limit)
     return results;
 }
 
-// ============== Documents (FTS5) ==============
+// ============== Documents (Vector RAG) ==============
 
-void DatabaseManager::indexDocument(const QString &filename, const QString &content)
+void DatabaseManager::indexDocument(const QString &filename, const QString &content, const QVariantList &embedding)
 {
     QSqlDatabase db = getConnection();
 
-    // Since DocumentProcessor chunks the text before calling indexDocument,
-    // 'content' here is already a single chunk. We will just insert it.
-    // We expect DocumentProcessor to have already called deleteDocument(filename).
-    // To maintain existing chunk_index logic, we will do a simple select max.
-
     QSqlQuery q(db);
-    q.prepare("SELECT MAX(CAST(chunk_index AS INTEGER)) FROM documents WHERE filename = ?");
+    q.prepare("SELECT MAX(chunk_index) FROM document_chunks WHERE filename = ?");
     q.addBindValue(filename);
     int chunkIndex = 0;
     if (q.exec() && q.next() && !q.value(0).isNull()) {
@@ -433,43 +462,53 @@ void DatabaseManager::indexDocument(const QString &filename, const QString &cont
     }
 
     QSqlQuery ins(db);
-    ins.prepare("INSERT INTO documents (filename, content, chunk_index) VALUES (?, ?, ?)");
+    ins.prepare("INSERT INTO document_chunks (filename, content, chunk_index) VALUES (?, ?, ?)");
     ins.addBindValue(filename);
     ins.addBindValue(content);
-    ins.addBindValue(QString::number(chunkIndex));
-    ins.exec();
+    ins.addBindValue(chunkIndex);
+    if (!ins.exec()) return;
+    
+    qint64 chunkId = ins.lastInsertId().toLongLong();
+
+    QByteArray embeddingData;
+    embeddingData.resize(embedding.size() * sizeof(float));
+    float *ptr = reinterpret_cast<float*>(embeddingData.data());
+    for (int i = 0; i < embedding.size(); i++) {
+        ptr[i] = static_cast<float>(embedding[i].toDouble());
+    }
+
+    QSqlQuery vec(db);
+    vec.prepare("INSERT INTO vec_documents (chunk_id, embedding) VALUES (?, ?)");
+    vec.addBindValue(chunkId);
+    vec.addBindValue(embeddingData);
+    vec.exec();
 
     emit documentIndexed(filename, chunkIndex + 1);
 }
 
-QVariantList DatabaseManager::searchDocuments(const QString &query, int limit)
+QVariantList DatabaseManager::searchDocuments(const QVariantList &queryEmbedding, int limit)
 {
     QSqlDatabase db = getConnection();
-    QSqlQuery q(db);
-
-    // Use FTS5 for fast full-text search
-    q.prepare(R"(
-        SELECT filename, content, rank
-        FROM documents
-        WHERE documents MATCH ?
-        ORDER BY rank LIMIT ?
-    )");
-
-    // Robust FTS5 query sanitization
-    // FTS5 MATCH operators like NEAR, OR, AND, NOT, *, and " can cause SQL errors if malformed
-    // We filter out any problematic characters and keep only alphanumeric and basic spaces
-    QString safeQuery = query;
-    QRegularExpression re("[^\\w\\s]");
-    safeQuery.replace(re, "");
-    safeQuery = safeQuery.trimmed();
-
-    // Fallback if empty after filtering
-    if (safeQuery.isEmpty()) {
-        safeQuery = query;
-        safeQuery.replace("\"", "\"\"");
+    
+    QByteArray queryData;
+    queryData.resize(queryEmbedding.size() * sizeof(float));
+    float *ptr = reinterpret_cast<float*>(queryData.data());
+    for (int i = 0; i < queryEmbedding.size(); i++) {
+        ptr[i] = static_cast<float>(queryEmbedding[i].toDouble());
     }
 
-    q.addBindValue("\"" + safeQuery + "\"");
+    QSqlQuery q(db);
+    q.prepare(R"(
+        SELECT dc.filename, dc.content, vec_distance_cosine(v.embedding, ?) as distance
+        FROM vec_documents v
+        JOIN document_chunks dc ON v.chunk_id = dc.chunk_id
+        WHERE v.embedding MATCH ? AND k = ?
+        ORDER BY distance LIMIT ?
+    )");
+    
+    q.addBindValue(queryData);
+    q.addBindValue(queryData);
+    q.addBindValue(limit);
     q.addBindValue(limit);
 
     QVariantList results;
@@ -478,7 +517,7 @@ QVariantList DatabaseManager::searchDocuments(const QString &query, int limit)
             QVariantMap doc;
             doc["filename"] = q.value(0).toString();
             doc["content"] = q.value(1).toString();
-            doc["rank"] = q.value(2).toDouble();
+            doc["distance"] = q.value(2).toDouble();
             results.append(doc);
         }
     }
@@ -489,16 +528,37 @@ void DatabaseManager::deleteDocument(const QString &filename)
 {
     QSqlDatabase db = getConnection();
     QSqlQuery q(db);
-    q.prepare("DELETE FROM documents WHERE filename = ?");
+    
+    // Get chunk IDs
+    q.prepare("SELECT chunk_id FROM document_chunks WHERE filename = ?");
     q.addBindValue(filename);
-    q.exec();
+    QVariantList chunkIds;
+    if (q.exec()) {
+        while (q.next()) {
+            chunkIds.append(q.value(0));
+        }
+    }
+    
+    // Delete from vec_documents
+    for (const QVariant& id : chunkIds) {
+        QSqlQuery dq(db);
+        dq.prepare("DELETE FROM vec_documents WHERE chunk_id = ?");
+        dq.addBindValue(id);
+        dq.exec();
+    }
+    
+    // Delete from document_chunks
+    QSqlQuery dq(db);
+    dq.prepare("DELETE FROM document_chunks WHERE filename = ?");
+    dq.addBindValue(filename);
+    dq.exec();
 }
 
 QVariantList DatabaseManager::getIndexedDocuments()
 {
     QSqlDatabase db = getConnection();
     QSqlQuery q(db);
-    q.exec("SELECT DISTINCT filename, COUNT(*) as chunks FROM documents GROUP BY filename");
+    q.exec("SELECT DISTINCT filename, COUNT(*) as chunks FROM document_chunks GROUP BY filename");
 
     QVariantList docs;
     while (q.next()) {

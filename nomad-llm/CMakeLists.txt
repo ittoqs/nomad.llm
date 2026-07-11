@@ -79,6 +79,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(wasm3)
 
+FetchContent_Declare(
+    sqlite_vec
+    URL https://github.com/asg017/sqlite-vec/releases/download/v0.1.1/sqlite-vec-amalgamation-0.1.1.tar.gz
+)
+FetchContent_GetProperties(sqlite_vec)
+if(NOT sqlite_vec_POPULATED)
+    FetchContent_Populate(sqlite_vec)
+endif()
+
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 
 # ============================================================
@@ -118,6 +127,9 @@ set(NOMAD_SOURCES
     src/ILlmBackend.h
     src/LlamaBackend.h
     src/LlamaBackend.cpp
+    src/embedding_engine.h
+    src/embedding_engine.cpp
+    ${sqlite_vec_SOURCE_DIR}/sqlite-vec.c
 )
 
 add_executable(nomad_llm ${NOMAD_SOURCES})
@@ -156,6 +168,7 @@ target_include_directories(nomad_llm PRIVATE
     ${whisper_cpp_SOURCE_DIR}/include
     ${pybind11_SOURCE_DIR}/include
     ${wasm3_SOURCE_DIR}/source
+    ${sqlite_vec_SOURCE_DIR}
     ${Python3_INCLUDE_DIRS}
 )
 
