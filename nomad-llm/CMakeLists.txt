@@ -128,6 +128,18 @@ qt_add_qml_module(nomad_llm
     VERSION 1.0
     QML_FILES
         qml/main.qml
+        qml/Theme.qml
+        qml/components/SidebarView.qml
+        qml/components/ChatArea.qml
+        qml/components/ChatInputBar.qml
+        qml/components/StatusBar.qml
+        qml/components/SettingsDrawer.qml
+        qml/components/PersonalityPopup.qml
+        qml/onboarding/OnboardingWizard.qml
+        qml/onboarding/WelcomeStep.qml
+        qml/onboarding/HardwareScanStep.qml
+        qml/onboarding/ModelSelectStep.qml
+        qml/onboarding/ReadyStep.qml
     RESOURCES
         nomad.svg
 )
