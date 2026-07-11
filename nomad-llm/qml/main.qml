@@ -454,5 +454,14 @@ Window {
             root.chatModel.clear();
             root.currentSessionId = 0;
         }
+
+        onStorageManagerRequested: {
+            settingsDrawer.close();
+            storageManager.open();
+        }
+    }
+
+    StorageManagerDrawer {
+        id: storageManager
     }
 }

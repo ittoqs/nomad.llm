@@ -16,6 +16,9 @@ class ModelManager : public QObject {
     Q_PROPERTY(double downloadProgress READ downloadProgress NOTIFY downloadProgressChanged)
     Q_PROPERTY(QString downloadingModel READ downloadingModel NOTIFY downloadingChanged)
     Q_PROPERTY(double downloadSpeedMBps READ downloadSpeedMBps NOTIFY downloadProgressChanged)
+    Q_PROPERTY(bool quantizing READ isQuantizing NOTIFY quantizingChanged)
+    Q_PROPERTY(double quantizeProgress READ quantizeProgress NOTIFY quantizeProgressChanged)
+    Q_PROPERTY(QString quantizingModel READ quantizingModel NOTIFY quantizingChanged)
 
 public:
     explicit ModelManager(const QString &modelsDir, QObject *parent = nullptr);
@@ -34,11 +37,19 @@ public:
     Q_INVOKABLE void cancelDownload();
     Q_INVOKABLE void deleteModel(const QString &filename);
 
+    // Quantization management
+    Q_INVOKABLE void quantizeModel(const QString &filename, const QString &format);
+    Q_INVOKABLE void cancelQuantize();
+
     // State
     bool isDownloading() const;
     double downloadProgress() const;
     QString downloadingModel() const;
     double downloadSpeedMBps() const;
+
+    bool isQuantizing() const;
+    double quantizeProgress() const;
+    QString quantizingModel() const;
 
 signals:
     void downloadingChanged();
@@ -48,6 +59,12 @@ signals:
     void downloadError(const QString &filename, const QString &error);
     void modelDeleted(const QString &filename);
 
+    void quantizingChanged();
+    void quantizeProgressChanged();
+    void quantizeStarted(const QString &filename);
+    void quantizeFinished(const QString &filename, const QString &newFilename);
+    void quantizeError(const QString &filename, const QString &error);
+
 private slots:
     void onDownloadProgress(qint64 bytesReceived, qint64 bytesTotal);
     void onDownloadFinished();
@@ -56,6 +73,8 @@ private slots:
 private:
     QString buildDownloadUrl(const QString &repoId, const QString &filename) const;
     void startSingleDownload(const QString &repoId, const QString &filename);
+
+    void doQuantize(const QString &filename, const QString &format);
 
     QString m_modelsDir;
     QNetworkAccessManager *m_networkManager;
@@ -70,6 +89,12 @@ private:
     double m_downloadSpeed = 0.0;
     QElapsedTimer m_speedTimer;
     qint64 m_lastBytesReceived = 0;
+
+    // Quantize state
+    bool m_isQuantizing = false;
+    double m_quantizeProgressValue = 0.0;
+    QString m_quantizingFilename;
+    std::atomic<bool> m_cancelQuantize{false};
 };
 
 #endif // MODEL_MANAGER_H

@@ -4,7 +4,10 @@
 #include <QFileInfo>
 #include <QDirIterator>
 #include <QDebug>
+#include <QtConcurrent>
+#include <QThread>
 #include "settings_manager.h"
+#include "llama.h"
 
 ModelManager::ModelManager(const QString &modelsDir, QObject *parent)
     : QObject(parent), m_modelsDir(modelsDir),
@@ -17,6 +20,7 @@ ModelManager::ModelManager(const QString &modelsDir, QObject *parent)
 ModelManager::~ModelManager()
 {
     cancelDownload();
+    cancelQuantize();
 }
 
 QString ModelManager::buildDownloadUrl(const QString &repoId, const QString &filename) const
@@ -358,4 +362,102 @@ QString ModelManager::downloadingModel() const
 double ModelManager::downloadSpeedMBps() const
 {
     return m_downloadSpeed;
+}
+
+// ============== Quantization Management ==============
+
+void ModelManager::quantizeModel(const QString &filename, const QString &format)
+{
+    if (m_isQuantizing) {
+        qWarning() << "Quantization already in progress";
+        return;
+    }
+
+    m_isQuantizing = true;
+    m_quantizeProgressValue = 0.0;
+    m_quantizingFilename = filename;
+    m_cancelQuantize = false;
+
+    emit quantizeStarted(filename);
+    emit quantizingChanged();
+    emit quantizeProgressChanged();
+
+    // Run quantization in a separate thread
+    QtConcurrent::run([this, filename, format]() {
+        this->doQuantize(filename, format);
+    });
+}
+
+void ModelManager::cancelQuantize()
+{
+    if (m_isQuantizing) {
+        m_cancelQuantize = true;
+        // llama_model_quantize doesn't support easy cancellation from another thread in older versions,
+        // but we set the flag in case a callback or future API supports it.
+    }
+}
+
+bool ModelManager::isQuantizing() const { return m_isQuantizing; }
+double ModelManager::quantizeProgress() const { return m_quantizeProgressValue; }
+QString ModelManager::quantizingModel() const { return m_quantizingFilename; }
+
+void ModelManager::doQuantize(const QString &filename, const QString &format)
+{
+    QString inputPath = m_modelsDir + "/" + filename;
+    
+    // Map format string to llama_ftype
+    llama_ftype ftype = LLAMA_FTYPE_MOSTLY_Q4_K_M;
+    if (format == "Q4_0") ftype = LLAMA_FTYPE_MOSTLY_Q4_0;
+    else if (format == "Q4_1") ftype = LLAMA_FTYPE_MOSTLY_Q4_1;
+    else if (format == "Q5_0") ftype = LLAMA_FTYPE_MOSTLY_Q5_0;
+    else if (format == "Q5_1") ftype = LLAMA_FTYPE_MOSTLY_Q5_1;
+    else if (format == "Q8_0") ftype = LLAMA_FTYPE_MOSTLY_Q8_0;
+    else if (format == "Q4_K_M") ftype = LLAMA_FTYPE_MOSTLY_Q4_K_M;
+    else if (format == "Q5_K_M") ftype = LLAMA_FTYPE_MOSTLY_Q5_K_M;
+    else if (format == "Q6_K") ftype = LLAMA_FTYPE_MOSTLY_Q6_K;
+    
+    // Construct output filename
+    QString outFilename = filename;
+    // Simple replacement to insert the new format
+    int dotIdx = outFilename.lastIndexOf('.');
+    if (dotIdx != -1) {
+        outFilename.insert(dotIdx, "-" + format);
+    } else {
+        outFilename += "-" + format;
+    }
+    
+    QString outputPath = m_modelsDir + "/" + outFilename;
+    
+    // Simulate some progress update since llama_model_quantize runs synchronously without easy callback
+    QMetaObject::invokeMethod(this, [this]() {
+        m_quantizeProgressValue = 0.5; // Indeterminate/halfway
+        emit quantizeProgressChanged();
+    });
+
+    llama_model_quantize_params params = llama_model_quantize_default_params();
+    params.nthread = QThread::idealThreadCount();
+    params.ftype = ftype;
+    
+    // Perform quantization
+    std::string inPathStr = inputPath.toStdString();
+    std::string outPathStr = outputPath.toStdString();
+    
+    int result = llama_model_quantize(inPathStr.c_str(), outPathStr.c_str(), &params);
+    
+    QMetaObject::invokeMethod(this, [this, result, filename, outFilename, outputPath]() {
+        m_isQuantizing = false;
+        m_quantizeProgressValue = 1.0;
+        m_quantizingFilename.clear();
+        
+        emit quantizingChanged();
+        emit quantizeProgressChanged();
+        
+        if (result == 0) {
+            emit quantizeFinished(filename, outFilename);
+        } else {
+            // Delete incomplete output file if it exists
+            QFile::remove(outputPath);
+            emit quantizeError(filename, "Quantization failed with error code " + QString::number(result));
+        }
+    });
 }

@@ -8,6 +8,7 @@ Drawer {
     edge: Qt.RightEdge
 
     signal clearDataRequested()
+    signal storageManagerRequested()
 
     background: Rectangle {
         color: Theme.bgPanel
@@ -115,6 +116,32 @@ Drawer {
         }
 
         Item { Layout.fillHeight: true }
+
+        // Manage Storage
+        Rectangle {
+            Layout.fillWidth: true
+            height: 40
+            radius: 8
+            color: storageBtn.containsMouse ? Theme.primaryHover : Theme.primary
+            
+            Text {
+                text: "Manage Storage"
+                color: "white"
+                font.pixelSize: 13
+                font.bold: true
+                anchors.centerIn: parent
+            }
+
+            MouseArea {
+                id: storageBtn
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    settingsDrawer.storageManagerRequested()
+                }
+            }
+        }
 
         // Clear Data
         Rectangle {
