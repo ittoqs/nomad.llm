@@ -6,6 +6,7 @@
 #include <QVariantList>
 
 class DatabaseManager;
+class EmbeddingEngine;
 
 class DocumentProcessor : public QObject {
     Q_OBJECT
@@ -41,6 +42,11 @@ public:
      */
     Q_INVOKABLE QVariantList searchContext(const QString &query, int limit = 3);
 
+    /**
+     * Set the embedding model path
+     */
+    Q_INVOKABLE bool loadEmbeddingModel(const QString &modelPath);
+
 signals:
     void processingChanged();
     void documentProcessed(const QString &filename, int chunkCount);
@@ -51,6 +57,7 @@ private:
     QStringList chunkText(const QString &text, int chunkSize = 800, int overlap = 100);
 
     DatabaseManager *m_db;
+    EmbeddingEngine *m_embeddingEngine;
     bool m_processing = false;
 };
 
