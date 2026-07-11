@@ -19,6 +19,8 @@ class HardwareDetector : public QObject {
     Q_PROPERTY(long long diskFreeBytes READ diskFreeBytes NOTIFY hardwareDetected)
     Q_PROPERTY(int recommendedGpuLayers READ recommendedGpuLayers NOTIFY hardwareDetected)
     Q_PROPERTY(int recommendedContextSize READ recommendedContextSize NOTIFY hardwareDetected)
+    Q_PROPERTY(bool onBattery READ onBattery NOTIFY hardwareDetected)
+    Q_PROPERTY(int recommendedCpuThreads READ recommendedCpuThreads NOTIFY hardwareDetected)
 
 public:
     explicit HardwareDetector(QObject *parent = nullptr);
@@ -33,6 +35,8 @@ public:
     long long diskFreeBytes() const;
     int recommendedGpuLayers() const;
     int recommendedContextSize() const;
+    bool onBattery() const;
+    int recommendedCpuThreads() const;
 
     Q_INVOKABLE void detect();
     Q_INVOKABLE void startMonitoring(int intervalMs = 5000);
@@ -48,6 +52,7 @@ private:
     void detectRam();
     void detectGpu();
     void detectDisk();
+    void detectBattery();
 
     long long m_totalRamBytes = 0;
     long long m_availableRamBytes = 0;
@@ -56,6 +61,7 @@ private:
     bool m_gpuAvailable = false;
     QString m_gpuName;
     long long m_diskFreeBytes = 0;
+    bool m_onBattery = false;
 
     QTimer *m_monitorTimer = nullptr;
 };
