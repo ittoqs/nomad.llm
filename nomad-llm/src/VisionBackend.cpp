@@ -2,6 +2,7 @@
 #include <llama.h>
 #include <QDebug>
 #include <QFile>
+#include <thread>
 #include <stdexcept>
 
 // Assuming llama.cpp has clip.h for vision examples (llava architecture compatible).
@@ -25,7 +26,7 @@ bool VisionBackend::loadVisionModel(const QString &modelPath, const QString &mmp
     llama_model_params model_params = llama_model_default_params();
     model_params.n_gpu_layers = nGpuLayers;
 
-    m_model = llama_load_model_from_file(modelPath.toStdString().c_str(), model_params);
+    m_model = llama_model_load_from_file(modelPath.toStdString().c_str(), model_params);
     if (!m_model) {
         qWarning() << "Failed to load vision model";
         return false;
@@ -35,7 +36,7 @@ bool VisionBackend::loadVisionModel(const QString &modelPath, const QString &mmp
     ctx_params.n_ctx = nCtx;
     ctx_params.n_threads = nThreads == 0 ? std::max(1, (int)std::thread::hardware_concurrency() / 2) : nThreads;
 
-    m_ctx = llama_new_context_with_model(m_model, ctx_params);
+    m_ctx = llama_init_from_model(m_model, ctx_params);
     if (!m_ctx) {
         qWarning() << "Failed to create context";
         unloadModel();
@@ -61,7 +62,7 @@ void VisionBackend::unloadModel() {
         m_ctx = nullptr;
     }
     if (m_model) {
-        llama_free_model(m_model);
+        llama_model_free(m_model);
         m_model = nullptr;
     }
 #ifdef HAS_LLAVA
@@ -96,11 +97,12 @@ std::string VisionBackend::buildPrompt(const QVariantList &messages) {
 
 std::string VisionBackend::tokenToString(int token) {
     if (!m_model) return "";
+    const struct llama_vocab *vocab = llama_model_get_vocab(m_model);
     std::vector<char> result(8, 0);
-    const int n_tokens = llama_token_to_piece(m_model, token, result.data(), result.size(), 0, true);
+    const int n_tokens = llama_token_to_piece(vocab, token, result.data(), result.size(), 0, true);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_token_to_piece(m_model, token, result.data(), result.size(), 0, true);
+        int check = llama_token_to_piece(vocab, token, result.data(), result.size(), 0, true);
         Q_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);

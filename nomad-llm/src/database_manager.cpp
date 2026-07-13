@@ -11,7 +11,12 @@
 
 // SQLite and sqlite-vec
 #include "sqlite3.h"
+extern "C" {
+#ifndef SQLITE_CORE
+#define SQLITE_CORE
+#endif
 #include "sqlite-vec.h"
+}
 
 DatabaseManager::DatabaseManager(const QString &dbPath, QObject *parent)
     : QObject(parent), m_dbPath(dbPath)

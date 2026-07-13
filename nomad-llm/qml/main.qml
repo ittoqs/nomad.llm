@@ -5,6 +5,7 @@ import QtQuick.Window 2.15
 import QtQuick.Dialogs
 import "components"
 import "onboarding"
+import Nomad
 
 Window {
     id: root
@@ -412,7 +413,6 @@ Window {
                         id: chatInputBar
                         Layout.fillWidth: true
                         currentSessionId: root.currentSessionId
-                        selectedImagePath: root.selectedImagePath
                         isGenerating: InferenceEngine.generating
                         
                         onSendMessageRequested: function(msg) { root.sendMessage(msg) }

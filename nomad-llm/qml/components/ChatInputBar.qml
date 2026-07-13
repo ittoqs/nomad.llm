@@ -14,6 +14,7 @@ DropArea {
 
     signal sendMessageRequested(string message)
     signal attachFileRequested()
+    signal clearAttachmentRequested()
     
     // We emit this to the parent (main.qml) or we can use the popup locally
     

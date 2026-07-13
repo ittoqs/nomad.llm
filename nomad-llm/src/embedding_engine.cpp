@@ -72,11 +72,12 @@ std::vector<float> EmbeddingEngine::computeEmbedding(const QString &text)
     
     // Tokenize
     std::vector<llama_token> tokens(str.length() + 2);
-    int n_tokens = llama_tokenize(m_model, str.c_str(), str.length(), tokens.data(), tokens.size(), true, true);
+    const struct llama_vocab *vocab = llama_model_get_vocab(m_model);
+    int n_tokens = llama_tokenize(vocab, str.c_str(), str.length(), tokens.data(), tokens.size(), true, true);
     if (n_tokens < 0) {
         // Retry with larger buffer
         tokens.resize(-n_tokens);
-        n_tokens = llama_tokenize(m_model, str.c_str(), str.length(), tokens.data(), tokens.size(), true, true);
+        n_tokens = llama_tokenize(vocab, str.c_str(), str.length(), tokens.data(), tokens.size(), true, true);
         if (n_tokens < 0) {
             qWarning() << "Failed to tokenize text for embeddings";
             return {};
@@ -87,7 +88,12 @@ std::vector<float> EmbeddingEngine::computeEmbedding(const QString &text)
     // Evaluate
     llama_batch batch = llama_batch_init(n_tokens, 0, 1);
     for (int i = 0; i < n_tokens; i++) {
-        llama_batch_add(&batch, tokens[i], i, { 0 }, false);
+        batch.token[batch.n_tokens] = tokens[i];
+        batch.pos[batch.n_tokens] = i;
+        batch.n_seq_id[batch.n_tokens] = 1;
+        batch.seq_id[batch.n_tokens][0] = 0;
+        batch.logits[batch.n_tokens] = false;
+        batch.n_tokens++;
     }
     
     // Request embedding for the last token or based on pooling

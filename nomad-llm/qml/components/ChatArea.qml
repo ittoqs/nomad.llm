@@ -9,14 +9,14 @@ ListView {
     spacing: 12
     cacheBuffer: 2000
 
-    property var chatModel
+    property var chatModel: null
     property bool isThinking: false
 
     model: chatModel
 
     // Empty state
     Text {
-        visible: chatModel.count === 0
+        visible: chatModel ? chatModel.count === 0 : true
         text: "🌊\n\n" + Settings.tr("welcome_title") + "\n" + Settings.tr("welcome_subtitle")
         color: Theme.textMuted
         font.pixelSize: 16
@@ -178,7 +178,7 @@ ListView {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: 8
-        visible: !chatList.atYEnd && chatModel.count > 5
+        visible: !chatList.atYEnd && (chatModel ? chatModel.count > 5 : false)
 
         Text { text: "↓"; color: Theme.textSecondary; font.pixelSize: 18; anchors.centerIn: parent }
         MouseArea {

@@ -9,7 +9,7 @@ Rectangle {
     clip: true
 
     property int currentSessionId: 0
-    property var sessionsModel
+    property var sessionsModel: null
     property double ramGB: 0
     property string activeFilename: ""
     property string activeModelName: ""
@@ -160,7 +160,7 @@ Rectangle {
 
             // Empty state
             Text {
-                visible: sessionsModel.count === 0
+                visible: sessionsModel ? sessionsModel.count === 0 : true
                 text: Settings.tr("no_sessions")
                 color: Theme.textSecondary
                 font.pixelSize: 13

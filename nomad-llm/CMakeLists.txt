@@ -67,15 +67,18 @@ set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(whisper_cpp)
 
 # Stable Diffusion (built as separate CLI for stability / out-of-process execution)
-FetchContent_Declare(
+include(ExternalProject)
+ExternalProject_Add(
     stable_diffusion_cpp
     GIT_REPOSITORY https://github.com/leejet/stable-diffusion.cpp.git
     GIT_TAG master
     GIT_SHALLOW TRUE
+    CMAKE_ARGS
+        -DSD_BUILD_EXAMPLES=ON
+        -DSD_BUILD_SHARED_LIBS=OFF
+        -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/sd_install
+    INSTALL_COMMAND cmake --install <BINARY_DIR>
 )
-set(SD_BUILD_EXAMPLES ON CACHE BOOL "" FORCE)
-set(SD_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(stable_diffusion_cpp)
 
 FetchContent_Declare(
     pybind11
@@ -95,7 +98,7 @@ FetchContent_MakeAvailable(wasm3)
 
 FetchContent_Declare(
     sqlite_vec
-    URL https://github.com/asg017/sqlite-vec/releases/download/v0.1.1/sqlite-vec-amalgamation-0.1.1.tar.gz
+    URL https://github.com/asg017/sqlite-vec/releases/download/v0.1.1/sqlite-vec-0.1.1-amalgamation.tar.gz
 )
 FetchContent_GetProperties(sqlite_vec)
 if(NOT sqlite_vec_POPULATED)
@@ -159,6 +162,7 @@ qt_add_qml_module(nomad_llm
     URI Nomad
     VERSION 1.0
     QML_FILES
+        qml/qmldir
         qml/main.qml
         qml/Theme.qml
         qml/components/SidebarView.qml
@@ -168,6 +172,7 @@ qt_add_qml_module(nomad_llm
         qml/components/SettingsDrawer.qml
         qml/components/PersonalityPopup.qml
         qml/components/ImageEditorPopup.qml
+        qml/components/StorageManagerDrawer.qml
         qml/onboarding/OnboardingWizard.qml
         qml/onboarding/WelcomeStep.qml
         qml/onboarding/HardwareScanStep.qml
@@ -210,7 +215,6 @@ target_link_libraries(nomad_llm PRIVATE
     m3
     Python3::Module
     Python3::Python
-    llava
     SQLite::SQLite3
 )
 
@@ -219,6 +223,7 @@ target_link_libraries(nomad_llm PRIVATE
 # ============================================================
 target_compile_definitions(nomad_llm PRIVATE
     APP_VERSION="${PROJECT_VERSION}"
+    SQLITE_CORE
 )
 
 # Platform-specific

@@ -11,7 +11,7 @@ ScriptEngine::ScriptEngine(QObject *parent) : QObject(parent) {
     
     // Install Python sandbox audit hook for strict security
     try {
-        py::exec(R"(
+        py::exec(R"EOF(
 import sys
 def sandbox_audit_hook(event, args):
     # Block writing files
@@ -33,7 +33,7 @@ def sandbox_audit_hook(event, args):
         raise RuntimeError(f"Sandbox security restriction: Command execution is denied ({event})")
 
 sys.addaudithook(sandbox_audit_hook)
-        )");
+)EOF");
     } catch (std::exception &e) {
         qDebug() << "Failed to install Python sandbox audit hook:" << e.what();
     }
