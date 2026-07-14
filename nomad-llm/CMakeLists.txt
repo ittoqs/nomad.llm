@@ -71,7 +71,7 @@ include(ExternalProject)
 ExternalProject_Add(
     stable_diffusion_cpp
     GIT_REPOSITORY https://github.com/leejet/stable-diffusion.cpp.git
-    GIT_TAG master
+    GIT_TAG b5d812008eb7082a238fc589444544b3278187ae
     GIT_SHALLOW TRUE
     CMAKE_ARGS
         -DSD_BUILD_EXAMPLES=ON
